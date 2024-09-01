@@ -1,24 +1,35 @@
-import discord
-from discord.ext import commands
-import os
 import requests
+import os
 
-# Set up Discord intents
-intents = discord.Intents.default()
-intents.message_content = True  # Correct the intent to enable reading message content
-intents.guilds = True
-intents.members = True
+ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Replace with your .ROBLOSECURITY cookie
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Function to get user ID from username
+def get_user_id(username):
+    url = "https://users.roblox.com/v1/usernames/users"
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
+        'Content-Type': 'application/json',
+    }
+    data = {
+        "usernames": [username]
+    }
 
-# Your Roblox group ID and Roblox cookie from environment variables for security
-ROBLOX_GROUP_ID = 'YOUR_GROUP_ID'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure your .ROBLOSECURITY cookie is in your environment variables
+    try:
+        response = requests.post(url, json=data, headers=headers)
+        response.raise_for_status()
 
-# Function to fetch group members from Roblox API
-def fetch_group_members(group_id):
-    url = f"https://groups.roblox.com/v1/groups/{group_id}/users?limit=100"
+        users = response.json().get('data', [])
+        if not users:
+            return None, "User not found"
 
+        return users[0]['id'], None
+    except requests.RequestException as e:
+        return None, f"Error fetching user ID: {e}"
+
+# Function to get the rank of the user in the group
+def get_user_rank_in_group(user_id, group_id):
+    url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
         'Content-Type': 'application/json',
@@ -26,35 +37,34 @@ def fetch_group_members(group_id):
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an error for non-200 responses
-        return response.json().get('data', [])
+        response.raise_for_status()
+
+        groups = response.json().get('data', [])
+        for group in groups:
+            if group['group']['id'] == int(group_id):
+                return group['role']['rank'], None
+
+        return None, "User is not in the group"
     except requests.RequestException as e:
-        print(f"Error fetching group members: {e}")
-        return []
+        return None, f"Error fetching user rank: {e}"
 
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user.name}')
+# Function to get the user rank by username
+def get_user_rank(username):
+    user_id, error = get_user_id(username)
+    if error:
+        return f"Error: {error}"
 
-# Command to search for members by keyword
-@bot.command()
-async def search(ctx, *, keyword):
-    members = fetch_group_members(ROBLOX_GROUP_ID)
+    rank, error = get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+    if error:
+        return f"Error: {error}"
 
-    if not members:
-        await ctx.send("No members found or failed to retrieve data.")
-        return
+    return f"{username} rank in the group: {rank}"
 
-    # Filter members based on the keyword
-    matching_users = [member['user']['username'] for member in members if keyword.lower() in member['user']['username'].lower()]
+# Main flow to get input from the user and display rank
+def main():
+    username = input("Enter the Roblox username: ")  # Prompt for username input
+    rank_info = get_user_rank(username)
+    print(rank_info)
 
-    if not matching_users:
-        await ctx.send("No matching users found.")
-        return
-
-    # Send matching users as a Discord message
-    message = "\n".join(matching_users)
-    await ctx.send(f"Matching users:\n{message}")
-
-# Run the bot using the token from environment variables
-bot.run(os.getenv('DISCORD_TOKEN'))
+if __name__ == "__main__":
+    main()
