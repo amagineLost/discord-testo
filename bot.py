@@ -102,15 +102,26 @@ async def rank(ctx, *, username: str):
     command_locks[lock_key] = discord.utils.utcnow()
 
     try:
-        # Send an initial message to indicate that the process has started
-        message = await ctx.send(f"Fetching rank for {username}...")
-        logging.debug(f"Sent initial fetching message for {username}.")
+        # Check if there's already an ongoing message for this command
+        ongoing_message = None
+        async for message in ctx.channel.history(limit=10):
+            if message.author == bot.user and message.content.startswith(f"Fetching rank for {username}"):
+                ongoing_message = message
+                break
+
+        if ongoing_message:
+            # Edit the existing message
+            await ongoing_message.edit(content=f"Fetching rank for {username}...")
+        else:
+            # Send an initial message to indicate that the process has started
+            ongoing_message = await ctx.send(f"Fetching rank for {username}...")
+            logging.debug(f"Sent initial fetching message for {username}.")
 
         # Call the function to get the rank
         rank_info = await get_user_rank(username)
 
         # Edit the existing message with the rank information
-        await message.edit(content=rank_info)
+        await ongoing_message.edit(content=rank_info)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
