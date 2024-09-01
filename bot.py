@@ -37,15 +37,25 @@ except json.JSONDecodeError as e:
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
 
+def days_to_years_days(days):
+    years = days // 365
+    remaining_days = days % 365
+    return years, remaining_days
+
 async def fetch_json(session, url, method='GET', headers=None, json=None):
     try:
         async with session.request(method, url, headers=headers, json=json) as response:
             response.raise_for_status()
             return await response.json()
     except aiohttp.ClientResponseError as e:
+        logging.error(f"HTTP Error {e.status}: {e.message} for URL {url}")
         raise Exception(f"HTTP Error {e.status}: {e.message}")
     except aiohttp.ClientError as e:
+        logging.error(f"Request Error: {e} for URL {url}")
         raise Exception(f"Request Error: {e}")
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON Decode Error: {e} for URL {url}")
+        raise Exception(f"JSON Decode Error: {e}")
 
 async def get_user_info(username):
     url = "https://users.roblox.com/v1/usernames/users"
@@ -61,142 +71,125 @@ async def get_user_info(username):
         if not users:
             return None, "User not found"
         user = users[0]
-        return user, None
+        user_id = user['id']
+        display_name = user['displayName']
+        
+        # Get account creation date
+        user_info_url = f"https://users.roblox.com/v1/users/{user_id}"
+        user_info_data = await fetch_json(session, user_info_url, headers=headers)
+        created_date_str = user_info_data['created']
+        created_date = datetime.strptime(created_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        current_date = datetime.utcnow()
+        account_age_days = (current_date - created_date).days
+        account_age_years, remaining_days = days_to_years_days(account_age_days)
+        
+        # Get user avatar URL
+        avatar_url = await get_roblox_avatar(session, user_id)
+        
+        return {
+            'id': user_id,
+            'display_name': display_name,
+            'account_age_years': account_age_years,
+            'account_age_days': remaining_days,
+            'avatar_url': avatar_url
+        }, None
 
-async def get_username_history(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}/username-history"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        history_data = await fetch_json(session, url, headers=headers)
-        return history_data.get('data', [])
-
-async def get_online_status(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}/presence"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        presence_data = await fetch_json(session, url, headers=headers)
-        return presence_data.get('status', 'Unknown')
-
-async def get_user_description(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        user_data = await fetch_json(session, url, headers=headers)
-        return user_data.get('description', 'No description available')
-
-async def get_account_age(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        user_data = await fetch_json(session, url, headers=headers)
-        created_date = user_data.get('created')
-        if created_date:
-            created_date = datetime.strptime(created_date, "%Y-%m-%dT%H:%M:%S.%fZ")
-            current_date = datetime.utcnow()
-            account_age_days = (current_date - created_date).days
-            years, days = divmod(account_age_days, 365)
-            return years, days
-        return None, "Failed to retrieve account age"
-
-async def get_rap(user_id):
-    url = f"https://api.robloxscripts.com/rap?userId={user_id}"
-    async with aiohttp.ClientSession() as session:
-        rap_data = await fetch_json(session, url)
-        return rap_data.get('rap', 'No RAP data available')
-
-async def get_limited_items(user_id):
-    url = f"https://api.robloxscripts.com/ltditems?userId={user_id}"
-    async with aiohttp.ClientSession() as session:
-        limited_items_data = await fetch_json(session, url)
-        return limited_items_data.get('items', [])
-
-async def get_avatar_images(user_id):
-    url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={user_id}&size=420x420&format=Png&isCircular=false"
-    async with aiohttp.ClientSession() as session:
-        response = await fetch_json(session, url)
-        if response['data']:
-            return response['data'][0]['imageUrl']
-    return None
-
-async def get_status_message(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        user_data = await fetch_json(session, url, headers=headers)
-        return user_data.get('status', 'No status message available')
-
-async def get_friends_list(user_id):
-    url = f"https://friends.roblox.com/v1/users/{user_id}/friends"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-    }
-    async with aiohttp.ClientSession() as session:
-        friends_data = await fetch_json(session, url, headers=headers)
-        return [friend['name'] for friend in friends_data.get('data', [])]
-
-async def get_user_groups(user_id):
+async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
+        'Content-Type': 'application/json',
     }
+
     async with aiohttp.ClientSession() as session:
         groups_data = await fetch_json(session, url, headers=headers)
-        return [group['group']['name'] for group in groups_data.get('data', [])]
+        groups = groups_data.get('data', [])
+        for group in groups:
+            if group['group']['id'] == int(group_id):
+                rank_number = group['role']['rank']
+                return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
+        return None, "User is not in the group"
+
+async def get_roblox_avatar(session, user_id):
+    url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={user_id}&size=420x420&format=Png&isCircular=false"
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    try:
+        data = await fetch_json(session, url, headers=headers)
+        if data['data']:
+            return data['data'][0]['imageUrl']
+    except Exception as e:
+        logging.error(f"Failed to fetch avatar for user ID {user_id}: {e}")
+    return None
 
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}')
 
 @bot.command()
-async def info(ctx, *, username: str):
+async def rank(ctx, *, username: str):
+    lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
+    logging.debug(f"Received rank command for {username} in channel {ctx.channel.id}.")
+
+    if lock_key in command_locks:
+        time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
+        if time_left > 0:
+            await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for `{username}`.")
+            logging.debug(f"Rate-limited response for {username}.")
+            return
+        else:
+            command_locks[lock_key] = discord.utils.utcnow()
+    else:
+        command_locks[lock_key] = discord.utils.utcnow()
+
     try:
-        user, error = await get_user_info(username)
+        ongoing_message = None
+        async for message in ctx.channel.history(limit=10):
+            if message.author == bot.user and message.content.startswith(f"Fetching rank for {username}"):
+                ongoing_message = message
+                break
+
+        if ongoing_message:
+            await ongoing_message.edit(content=f"Fetching rank for {username}...")
+        else:
+            ongoing_message = await ctx.send(f"Fetching rank for {username}...")
+            logging.debug(f"Sent initial fetching message for {username}.")
+
+        user_info, error = await get_user_info(username)
         if error:
-            await ctx.send(f"Error: {error}")
+            await ongoing_message.edit(content=f"Error: {error}")
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        user_id = user['id']
-        display_name = user.get('displayName', 'Unknown')
-        username_history = await get_username_history(user_id)
-        online_status = await get_online_status(user_id)
-        description = await get_user_description(user_id)
-        account_age_years, account_age_days = await get_account_age(user_id)
-        rap = await get_rap(user_id)
-        limited_items = await get_limited_items(user_id)
-        avatar_url = await get_avatar_images(user_id)
-        status_message = await get_status_message(user_id)
-        friends_list = await get_friends_list(user_id)
-        groups = await get_user_groups(user_id)
+        user_id = user_info['id']
+        display_name = user_info['display_name']
+        account_age_years = user_info['account_age_years']
+        account_age_days = user_info['account_age_days']
+        avatar_url = user_info['avatar_url']
+        rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+        if error:
+            await ongoing_message.edit(content=f"Error: {error}")
+            logging.error(f"Error occurred for {username}: {error}")
+            return
 
         embed = discord.Embed(
-            title=f"Info for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Online Status:** {online_status}\n**Description:** {description}\n**Account Age:** {account_age_years} years and {account_age_days} days\n**Creation Date:** {user.get('created', 'Unknown')}\n**RAP:** {rap}\n**Status Message:** {status_message}",
+            title=f"Rank Information for {display_name}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age_years} years and {account_age_days} days",
             color=0x1E90FF
         )
-
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
-        embed.add_field(name="Username History", value=", ".join(username_history) if username_history else "No history available", inline=False)
-        embed.add_field(name="Limited Items", value=", ".join(limited_items) if limited_items else "No limited items available", inline=False)
-        embed.add_field(name="Friends List", value=", ".join(friends_list) if friends_list else "No friends available", inline=False)
-        embed.add_field(name="Groups", value=", ".join(groups) if groups else "No groups available", inline=False)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
 
-        await ctx.send(embed=embed)
-        logging.debug(f"Sent info message for {username}")
+        await ongoing_message.edit(content=None, embed=embed)
+        logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
-        await ctx.send(f"An error occurred: {str(e)}")
-        logging.error(f"Exception occurred in info command: {str(e)}")
+        await ctx.send(f"An error occurred: {e}")
+        logging.error(f"Error occurred for {username}: {e}")
+    finally:
+        if lock_key in command_locks:
+            command_locks.pop(lock_key, None)
+            logging.debug(f"Lock released for {username}.")
 
 bot.run(DISCORD_TOKEN)
