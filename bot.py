@@ -4,6 +4,7 @@ import os
 import aiohttp
 import logging
 import json
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -35,6 +36,13 @@ except json.JSONDecodeError as e:
 # Create a dictionary to track ongoing commands
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
+
+def calculate_account_age(created_date_str):
+    """Calculate the number of days since the account was created."""
+    created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
+    today = datetime.utcnow()
+    delta = today - created_date
+    return delta.days
 
 async def fetch_json(session, url, method='GET', headers=None, json=None):
     try:
@@ -129,9 +137,11 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
+        account_age = calculate_account_age(user_info['created'])
+
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Created:** {user_info['created']}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
             color=0x1E90FF
         )
         embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
