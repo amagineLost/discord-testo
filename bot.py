@@ -22,7 +22,6 @@ ROBLOX_GROUP_ID = '11592051'
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
-GAME_ID = 15673118894  # Replace with your actual game ID
 
 # Check if necessary environment variables are set
 if not ROBLOX_COOKIE or not DISCORD_TOKEN or not RANK_NAME_MAPPING_JSON:
@@ -124,20 +123,6 @@ async def get_roblox_avatar(session, user_id):
         logging.error(f"Failed to fetch avatar for user ID {user_id}: {e}")
     return None
 
-async def get_owned_game_passes(user_id):
-    url = f"https://api.roblox.com/users/{user_id}/game-pass"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
-    }
-    async with aiohttp.ClientSession() as session:
-        try:
-            data = await fetch_json(session, url, headers=headers)
-            owned_game_passes = [gp for gp in data if gp.get("gameId") == GAME_ID]
-            return owned_game_passes
-        except Exception as e:
-            logging.error(f"Failed to fetch game passes for user ID {user_id}: {e}")
-            return []
-
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}')
@@ -150,7 +135,7 @@ async def rank(ctx, *, username: str):
     if lock_key in command_locks:
         time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
         if time_left > 0:
-            await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for `{username}`.")
+            await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for {username}.")
             logging.debug(f"Rate-limited response for {username}.")
             return
         else:
@@ -188,8 +173,6 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        game_passes = await get_owned_game_passes(user_id)
-
         # Create embed
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
@@ -199,13 +182,10 @@ async def rank(ctx, *, username: str):
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
-        
-        # Add game passes information
-        if game_passes:
-            game_passes_list = "\n".join([f"Game Pass ID: {gp['id']}" for gp in game_passes])
-            embed.add_field(name="Owned Game Passes", value=game_passes_list, inline=False)
-        else:
-            embed.add_field(name="Owned Game Passes", value="No game passes found", inline=False)
+
+        # Add more fields
+        embed.add_field(name="Badges", value="TBD", inline=False)  # Replace with actual badge info if available
+        embed.add_field(name="Status", value="TBD", inline=False)  # Replace with actual status info if available
 
         # Add footer
         embed.set_footer(text=f"Information retrieved from Roblox | Requested at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -214,7 +194,10 @@ async def rank(ctx, *, username: str):
         await ongoing_message.edit(content=None, embed=embed)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
-        await ongoing_message.edit(content=f"An error occurred: {e}")
-        logging.error(f"An unexpected error occurred for {username}: {e}")
+        await ctx.send(f"An error occurred: {e}")
+        logging.error(f"Error occurred for {username}: {e}")
+    finally:
+        command_locks.pop(lock_key, None)
+        logging.debug(f"Lock released for {username}.")
 
 bot.run(DISCORD_TOKEN)
