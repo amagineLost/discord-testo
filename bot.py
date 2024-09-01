@@ -5,18 +5,18 @@ import os
 
 # Create an instance of Intents with all intents enabled
 intents = discord.Intents.default()
-intents.messages = True  # Enable message intents
-intents.guilds = True  # Enable guild (server) intents
-intents.members = True  # Enable member intents
-intents.reactions = True  # Enable reaction intents
-intents.typing = True  # Enable typing intents
-intents.presences = True  # Enable presence intents
-intents.voice_states = True  # Enable voice state intents
-intents.message_content = True  # Enable message content intent
+intents.messages = True
+intents.guilds = True
+intents.members = True
+intents.reactions = True
+intents.typing = True
+intents.presences = True
+intents.voice_states = True
+intents.message_content = True  # Add this line to handle message content
 
-# Fetch environment variables
-TOKEN = os.getenv("DISCORD_TOKEN")  # Get the Discord token from environment variables
-ROBUX_GROUP_ID = os.getenv("ROBUX_GROUP_ID")  # Get the Roblox Group ID from environment variables
+# Retrieve sensitive information from environment variables
+TOKEN = os.getenv('DISCORD_TOKEN')
+ROBUX_GROUP_ID = os.getenv('ROBUX_GROUP_ID')
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -26,36 +26,35 @@ async def on_ready():
 
 @bot.command()
 async def search(ctx, *, keyword):
-    # Fetch the list of Roblox users from the group
+    # Example using a hypothetical API endpoint
+    url = f'https://example.com/api/groups/{ROBUX_GROUP_ID}/members'
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'YourUserAgent'
     }
-    url = f'https://robloxsocial.com/groups/{ROBUX_GROUP_ID}/members'  # This URL is hypothetical
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        await ctx.send('Failed to retrieve members from Roblox.')
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        await ctx.send(f'Error during request: {e}')
         return
 
     try:
         members = response.json().get('members', [])
     except ValueError:
-        await ctx.send('Error parsing Roblox members data.')
+        await ctx.send('Error parsing members data.')
         return
 
-    # Search for members whose username or display name contains the keyword
     matching_users = [member for member in members if keyword.lower() in member['username'].lower() or keyword.lower() in member['displayName'].lower()]
 
     if not matching_users:
         await ctx.send('No users found.')
         return
 
-    # Prepare the list of matching users
     message = 'Users found:\n'
     for user in matching_users:
         message += f'{user["username"]} ({user["displayName"]})\n'
 
-    # Send the result to the Discord channel
     await ctx.send(message)
 
 bot.run(TOKEN)
