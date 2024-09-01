@@ -17,7 +17,6 @@ intents.message_content = True  # This is required to read message content in ne
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Environment variables
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
@@ -64,7 +63,7 @@ async def get_user_info(username):
         return {
             'id': user['id'],
             'display_name': user['displayName'],
-            'account_age': user.get('created', 'Unknown')  # Fallback to 'Unknown' if 'created' is not present
+            'created': user['created']
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -82,16 +81,6 @@ async def get_user_rank_in_group(user_id, group_id):
                 rank_number = group['role']['rank']
                 return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
         return None, "User is not in the group"
-
-async def get_game_start_date(user_id, game_id):
-    # Placeholder function; replace with actual logic to determine game start date
-    # This function should query the game's API or database to get the date when the user started playing
-    try:
-        # Example: Fetch game start date from a database or API
-        # Simulated response
-        return "Unknown", None
-    except Exception as e:
-        return "Error fetching date", str(e)
 
 @bot.event
 async def on_ready():
@@ -140,21 +129,9 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        game_start_date, error = await get_game_start_date(user_id, '15673118894')  # Replace with your game ID
-        if error:
-            await ongoing_message.edit(content=f"Error: {error}")
-            logging.error(f"Error occurred for {username}: {error}")
-            return
-
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=(
-                f"**Username:** {username}\n"
-                f"**Display Name:** {display_name}\n"
-                f"**Rank:** {rank}\n"
-                f"**Account Age:** {user_info.get('account_age', 'Unknown')} days\n"
-                f"**Started Playing Game:** {game_start_date}"
-            ),
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Created:** {user_info['created']}",
             color=0x1E90FF
         )
         embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
