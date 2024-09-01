@@ -37,6 +37,11 @@ except json.JSONDecodeError as e:
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
 
+def days_to_years_days(days):
+    years = days // 365
+    remaining_days = days % 365
+    return years, remaining_days
+
 async def fetch_json(session, url, method='GET', headers=None, json=None):
     try:
         async with session.request(method, url, headers=headers, json=json) as response:
@@ -75,7 +80,8 @@ async def get_user_info(username):
         created_date_str = user_info_data['created']
         created_date = datetime.strptime(created_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
         current_date = datetime.utcnow()
-        account_age = (current_date - created_date).days
+        account_age_days = (current_date - created_date).days
+        account_age_years, remaining_days = days_to_years_days(account_age_days)
         
         # Get user avatar URL
         avatar_url = await get_roblox_avatar(session, user_id)
@@ -83,7 +89,8 @@ async def get_user_info(username):
         return {
             'id': user_id,
             'display_name': display_name,
-            'account_age': account_age,
+            'account_age_years': account_age_years,
+            'account_age_days': remaining_days,
             'avatar_url': avatar_url
         }, None
 
@@ -157,7 +164,8 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
-        account_age = user_info['account_age']
+        account_age_years = user_info['account_age_years']
+        account_age_days = user_info['account_age_days']
         avatar_url = user_info['avatar_url']
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
@@ -167,7 +175,7 @@ async def rank(ctx, *, username: str):
 
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age_years} years and {account_age_days} days",
             color=0x1E90FF
         )
         if avatar_url:
