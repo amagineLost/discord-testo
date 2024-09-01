@@ -5,7 +5,14 @@ import os
 
 # Create an instance of Intents with all intents enabled
 intents = discord.Intents.default()
+intents.messages = True  # Enable message intents
+intents.guilds = True  # Enable guild (server) intents
 intents.members = True  # Enable member intents
+intents.reactions = True  # Enable reaction intents
+intents.typing = True  # Enable typing intents
+intents.presences = True  # Enable presence intents
+intents.voice_states = True  # Enable voice state intents
+intents.message_content = True  # Enable message content intent
 
 # Fetch environment variables
 TOKEN = os.getenv("DISCORD_TOKEN")  # Get the Discord token from environment variables
