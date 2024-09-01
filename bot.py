@@ -1,60 +1,57 @@
 import discord
 from discord.ext import commands
-import requests
 import os
+import requests
 
-# Create an instance of Intents with all intents enabled
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
 intents.members = True
-intents.reactions = True
-intents.typing = True
-intents.presences = True
-intents.voice_states = True
-intents.message_content = True  # Add this line to handle message content
-
-# Retrieve sensitive information from environment variables
-TOKEN = os.getenv('DISCORD_TOKEN')
-ROBUX_GROUP_ID = os.getenv('ROBUX_GROUP_ID')
-
 bot = commands.Bot(command_prefix='!', intents=intents)
+
+# Your Roblox group ID and Roblox cookie from environment variables for security
+ROBLOX_GROUP_ID = 'YOUR_GROUP_ID'  # Replace with your group ID
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Replace with your .ROBLOSECURITY cookie
+
+# Function to fetch group members from Roblox API
+def fetch_group_members(group_id):
+    url = f"https://groups.roblox.com/v1/groups/{group_id}/users?limit=100"
+
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
+        'Content-Type': 'application/json',
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an error for non-200 responses
+        return response.json().get('data', [])
+    except requests.RequestException as e:
+        print(f"Error fetching group members: {e}")
+        return []
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
+# Command to search for members by keyword
 @bot.command()
 async def search(ctx, *, keyword):
-    # Example using a hypothetical API endpoint
-    url = f'https://example.com/api/groups/{ROBUX_GROUP_ID}/members'
-    headers = {
-        'User-Agent': 'YourUserAgent'
-    }
+    members = fetch_group_members(ROBLOX_GROUP_ID)
 
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        await ctx.send(f'Error during request: {e}')
+    if not members:
+        await ctx.send("No members found or failed to retrieve data.")
         return
 
-    try:
-        members = response.json().get('members', [])
-    except ValueError:
-        await ctx.send('Error parsing members data.')
-        return
-
-    matching_users = [member for member in members if keyword.lower() in member['username'].lower() or keyword.lower() in member['displayName'].lower()]
+    # Filter members based on the keyword
+    matching_users = [member['user']['username'] for member in members if keyword.lower() in member['user']['username'].lower()]
 
     if not matching_users:
-        await ctx.send('No users found.')
+        await ctx.send("No matching users found.")
         return
 
-    message = 'Users found:\n'
-    for user in matching_users:
-        message += f'{user["username"]} ({user["displayName"]})\n'
+    # Send matching users as a Discord message
+    message = "\n".join(matching_users)
+    await ctx.send(f"Matching users:\n{message}")
 
-    await ctx.send(message)
-
-bot.run(TOKEN)
+bot.run(os.getenv('DISCORD_TOKEN'))
