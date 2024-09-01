@@ -2,6 +2,10 @@ import discord
 from discord.ext import commands
 import os
 import requests
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Create intents object and enable all required intents
 intents = discord.Intents.all()
@@ -75,11 +79,12 @@ def get_user_rank(username):
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user.name}')
+    logging.info(f'Logged in as {bot.user.name}')
 
 # Command to check the rank of a user in the Roblox group
 @bot.command()
 async def rank(ctx, *, username: str):
+    logging.info(f"Rank command triggered by {ctx.author} for username: {username}")
     try:
         # Send an initial message to indicate that the process has started
         message = await ctx.send(f"Fetching rank for {username}...")
