@@ -124,15 +124,15 @@ async def get_roblox_avatar(session, user_id):
         logging.error(f"Failed to fetch avatar for user ID {user_id}: {e}")
     return None
 
-async def get_owned_game_passes(user_id, game_id):
-    url = f"https://api.roblox.com/user/{user_id}/game-pass"
+async def get_owned_game_passes(user_id):
+    url = f"https://api.roblox.com/users/{user_id}/game-pass"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
     }
     async with aiohttp.ClientSession() as session:
         try:
             data = await fetch_json(session, url, headers=headers)
-            owned_game_passes = [gp for gp in data if gp.get("gameId") == game_id]
+            owned_game_passes = [gp for gp in data if gp.get("gameId") == GAME_ID]
             return owned_game_passes
         except Exception as e:
             logging.error(f"Failed to fetch game passes for user ID {user_id}: {e}")
@@ -188,9 +188,7 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        # Fetch game passes using the asynchronous function
-        game_passes = await get_owned_game_passes(user_id, GAME_ID)
-        game_passes_info = "\n".join(f"Game Pass ID: {gp['id']} - {gp.get('name', 'No name available')}" for gp in game_passes) or "No game passes found."
+        game_passes = await get_owned_game_passes(user_id)
 
         # Create embed
         embed = discord.Embed(
@@ -201,7 +199,13 @@ async def rank(ctx, *, username: str):
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
-        embed.add_field(name="Game Passes", value=game_passes_info, inline=False)
+        
+        # Add game passes information
+        if game_passes:
+            game_passes_list = "\n".join([f"Game Pass ID: {gp['id']}" for gp in game_passes])
+            embed.add_field(name="Owned Game Passes", value=game_passes_list, inline=False)
+        else:
+            embed.add_field(name="Owned Game Passes", value="No game passes found", inline=False)
 
         # Add footer
         embed.set_footer(text=f"Information retrieved from Roblox | Requested at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -210,10 +214,7 @@ async def rank(ctx, *, username: str):
         await ongoing_message.edit(content=None, embed=embed)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
-        logging.error(f"Error occurred for {username}: {e}")
-    finally:
-        command_locks.pop(lock_key, None)
-        logging.debug(f"Lock released for {username}.")
+        await ongoing_message.edit(content=f"An error occurred: {e}")
+        logging.error(f"An unexpected error occurred for {username}: {e}")
 
 bot.run(DISCORD_TOKEN)
