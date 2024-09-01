@@ -4,6 +4,7 @@ import os
 import aiohttp
 import logging
 import json
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -12,13 +13,13 @@ logging.basicConfig(level=logging.DEBUG)
 intents = discord.Intents.default()
 intents.members = True
 intents.presences = True
-intents.message_content = True  # This is required to read message content in newer API versions
+intents.message_content = True
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
+ROBLOX_GROUP_ID = '11592051'
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
 
@@ -62,7 +63,8 @@ async def get_user_info(username):
         user = users[0]
         return {
             'id': user['id'],
-            'display_name': user['displayName']
+            'display_name': user['displayName'],
+            'created_at': user['created']
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -80,6 +82,19 @@ async def get_user_rank_in_group(user_id, group_id):
                 rank_number = group['role']['rank']
                 return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
         return None, "User is not in the group"
+
+async def get_character_image(user_id):
+    url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=420x420&format=Png"
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
+        'Content-Type': 'application/json',
+    }
+
+    async with aiohttp.ClientSession() as session:
+        images_data = await fetch_json(session, url, headers=headers)
+        if images_data and 'data' in images_data:
+            return images_data['data'][0]['imageUrl']
+        return None
 
 @bot.event
 async def on_ready():
@@ -122,18 +137,23 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
+        created_at = datetime.strptime(user_info['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        account_age = (discord.utils.utcnow() - created_at).days
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
             logging.error(f"Error occurred for {username}: {error}")
             return
 
+        character_image = await get_character_image(user_id)
+
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
             color=0x1E90FF
         )
-        embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
+        if character_image:
+            embed.set_thumbnail(url=character_image)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
 
         await ongoing_message.edit(content=None, embed=embed)
