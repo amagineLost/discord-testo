@@ -36,7 +36,7 @@ async def fetch_json(session, url, method='GET', headers=None, json=None):
     except aiohttp.ClientError as e:
         raise Exception(f"Request Error: {e}")
 
-async def get_user_id(username):
+async def get_user_info(username):
     url = "https://users.roblox.com/v1/usernames/users"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
@@ -49,7 +49,12 @@ async def get_user_id(username):
         users = users_data.get('data', [])
         if not users:
             return None, "User not found"
-        return users[0]['id'], None
+        user = users[0]
+        return {
+            'id': user['id'],
+            'display_name': user['displayName'],
+            'username': user['name']
+        }, None
 
 async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
@@ -66,28 +71,10 @@ async def get_user_rank_in_group(user_id, group_id):
                 return group['role']['rank'], None
         return None, "User is not in the group"
 
-async def get_user_rank(username):
-    user_id, error = await get_user_id(username)
-    if error:
-        return f"Error: {error}"
-
-    rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
-    if error:
-        return f"Error: {error}"
-
-    return f"{username}'s rank in the group: {rank}"
-
-@bot.event
-async def on_ready():
-    logging.info(f'Logged in as {bot.user.name}')
-
-@bot.command()
 async def rank(ctx, *, username: str):
-    # Use the username to create a unique lock key
     lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
     logging.debug(f"Received rank command for {username} in channel {ctx.channel.id}.")
 
-    # Check if the command is rate-limited
     if lock_key in command_locks:
         time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
         if time_left > 0:
@@ -95,14 +82,11 @@ async def rank(ctx, *, username: str):
             logging.debug(f"Rate-limited response for {username}.")
             return
         else:
-            # Update the lock timestamp if the cooldown has expired
             command_locks[lock_key] = discord.utils.utcnow()
     else:
-        # Set the lock with the current timestamp if not already locked
         command_locks[lock_key] = discord.utils.utcnow()
 
     try:
-        # Check if there's already an ongoing message for this command
         ongoing_message = None
         async for message in ctx.channel.history(limit=10):
             if message.author == bot.user and message.content.startswith(f"Fetching rank for {username}"):
@@ -110,24 +94,39 @@ async def rank(ctx, *, username: str):
                 break
 
         if ongoing_message:
-            # Edit the existing message
             await ongoing_message.edit(content=f"Fetching rank for {username}...")
         else:
-            # Send an initial message to indicate that the process has started
             ongoing_message = await ctx.send(f"Fetching rank for {username}...")
             logging.debug(f"Sent initial fetching message for {username}.")
 
-        # Call the function to get the rank
-        rank_info = await get_user_rank(username)
+        user_info, error = await get_user_info(username)
+        if error:
+            await ongoing_message.edit(content=f"Error: {error}")
+            logging.error(f"Error occurred for {username}: {error}")
+            return
 
-        # Edit the existing message with the rank information
-        await ongoing_message.edit(content=rank_info)
+        user_id = user_info['id']
+        display_name = user_info['display_name']
+        rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+        if error:
+            await ongoing_message.edit(content=f"Error: {error}")
+            logging.error(f"Error occurred for {username}: {error}")
+            return
+
+        embed = discord.Embed(
+            title=f"Rank Information for {display_name}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}",
+            color=0x1E90FF
+        )
+        embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
+        embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
+
+        await ongoing_message.edit(content=None, embed=embed)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
         logging.error(f"Error occurred for {username}: {e}")
     finally:
-        # Ensure lock is removed
         if lock_key in command_locks:
             command_locks.pop(lock_key, None)
             logging.debug(f"Lock released for {username}.")
