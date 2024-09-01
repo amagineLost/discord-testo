@@ -1,8 +1,16 @@
-import requests
+import discord
+from discord.ext import commands
 import os
+import requests
+
+intents = discord.Intents.default()
+intents.messages = True
+intents.guilds = True
+intents.members = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Replace with your .ROBLOSECURITY cookie
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 
 # Function to get user ID from username
 def get_user_id(username):
@@ -58,13 +66,21 @@ def get_user_rank(username):
     if error:
         return f"Error: {error}"
 
-    return f"{username} rank in the group: {rank}"
+    return f"{username}'s rank in the group: {rank}"
 
-# Main flow to get input from the user and display rank
-def main():
-    username = input("Enter the Roblox username: ")  # Prompt for username input
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user.name}')
+
+# Command to check the rank of a user in the Roblox group
+@bot.command()
+async def rank(ctx, *, username: str):
+    await ctx.send(f"Fetching rank for {username}...")
+    
+    # Call the function to get the rank
     rank_info = get_user_rank(username)
-    print(rank_info)
+    
+    # Send the result to the Discord channel
+    await ctx.send(rank_info)
 
-if __name__ == "__main__":
-    main()
+bot.run(os.getenv('DISCORD_TOKEN'))
