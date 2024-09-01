@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import requests
+import os
 
 # Create an instance of Intents with all intents enabled
 intents = discord.Intents.default()
@@ -13,7 +14,7 @@ intents.presences = True
 intents.voice_states = True
 intents.message_content = True  # Add this line to handle message content
 
-TOKEN = "YOUR_DISCORD_TOKEN_HERE"  # Replace the real token
+TOKEN = os.getenv("DISCORD_TOKEN")  # Use environment variable for the token
 ROBUX_GROUP_ID = '11592051'  # Replace with your Roblox Group ID
 
 bot = commands.Bot(command_prefix='!', intents=intents)
