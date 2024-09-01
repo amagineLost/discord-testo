@@ -4,7 +4,6 @@ import os
 import aiohttp
 import logging
 import json
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,6 +17,7 @@ intents.message_content = True  # This is required to read message content in ne
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Environment variables
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
@@ -61,11 +61,10 @@ async def get_user_info(username):
         if not users:
             return None, "User not found"
         user = users[0]
-        created_at = user.get('created', 'Unknown')  # Default to 'Unknown' if 'created' is not present
         return {
             'id': user['id'],
             'display_name': user['displayName'],
-            'created_at': created_at
+            'account_age': user.get('created', 'Unknown')  # Fallback to 'Unknown' if 'created' is not present
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -84,18 +83,15 @@ async def get_user_rank_in_group(user_id, group_id):
                 return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
         return None, "User is not in the group"
 
-async def get_character_image(user_id):
-    url = f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png"
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    return url
-                else:
-                    return None
-        except aiohttp.ClientError as e:
-            logging.error(f"Failed to fetch character image: {e}")
-            return None
+async def get_game_start_date(user_id, game_id):
+    # Placeholder function; replace with actual logic to determine game start date
+    # This function should query the game's API or database to get the date when the user started playing
+    try:
+        # Example: Fetch game start date from a database or API
+        # Simulated response
+        return "Unknown", None
+    except Exception as e:
+        return "Error fetching date", str(e)
 
 @bot.event
 async def on_ready():
@@ -138,28 +134,30 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
-        created_at = user_info['created_at']
-        if created_at != 'Unknown':
-            created_at_date = datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%fZ')
-            account_age = (discord.utils.utcnow() - created_at_date).days
-        else:
-            account_age = 'Unknown'
-
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        character_image = await get_character_image(user_id)
+        game_start_date, error = await get_game_start_date(user_id, '15673118894')  # Replace with your game ID
+        if error:
+            await ongoing_message.edit(content=f"Error: {error}")
+            logging.error(f"Error occurred for {username}: {error}")
+            return
 
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
+            description=(
+                f"**Username:** {username}\n"
+                f"**Display Name:** {display_name}\n"
+                f"**Rank:** {rank}\n"
+                f"**Account Age:** {user_info.get('account_age', 'Unknown')} days\n"
+                f"**Started Playing Game:** {game_start_date}"
+            ),
             color=0x1E90FF
         )
-        if character_image:
-            embed.set_thumbnail(url=character_image)
+        embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
 
         await ongoing_message.edit(content=None, embed=embed)
