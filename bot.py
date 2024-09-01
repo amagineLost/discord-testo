@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import aiohttp
 import logging
+import json
 from datetime import datetime
 
 # Configure logging
@@ -11,7 +12,6 @@ logging.basicConfig(level=logging.DEBUG)
 # Create intents object and enable all required intents
 intents = discord.Intents.default()
 intents.members = True
-intents.message_content = True  # Enable message content intent
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -19,10 +19,19 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')  # New environment variable
 
 # Check if necessary environment variables are set
 if not ROBLOX_COOKIE or not DISCORD_TOKEN:
     raise ValueError("Environment variables ROBLOX_COOKIE and DISCORD_TOKEN must be set.")
+if not RANK_NAME_MAPPING_JSON:
+    raise ValueError("Environment variable RANK_NAME_MAPPING must be set.")
+
+# Parse rank name mapping from environment variable
+try:
+    RANK_NAME_MAPPING = json.loads(RANK_NAME_MAPPING_JSON)
+except json.JSONDecodeError:
+    raise ValueError("Invalid JSON format in RANK_NAME_MAPPING environment variable.")
 
 # Create a dictionary to track ongoing commands
 command_locks = {}
@@ -47,19 +56,15 @@ async def get_user_info(username):
     data = {"usernames": [username]}
 
     async with aiohttp.ClientSession() as session:
-        try:
-            users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
-            users = users_data.get('data', [])
-            if not users:
-                return None, "User not found"
-            user = users[0]
-            return {
-                'id': user['id'],
-                'display_name': user['displayName']
-            }, None
-        except Exception as e:
-            logging.error(f"Error fetching user info: {e}")
-            return None, "Failed to fetch user information"
+        users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
+        users = users_data.get('data', [])
+        if not users:
+            return None, "User not found"
+        user = users[0]
+        return {
+            'id': user['id'],
+            'display_name': user['displayName']
+        }, None
 
 async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
@@ -69,16 +74,12 @@ async def get_user_rank_in_group(user_id, group_id):
     }
 
     async with aiohttp.ClientSession() as session:
-        try:
-            groups_data = await fetch_json(session, url, headers=headers)
-            groups = groups_data.get('data', [])
-            for group in groups:
-                if group['group']['id'] == int(group_id):
-                    return group['role']['rank'], None
-            return None, "User is not in the group"
-        except Exception as e:
-            logging.error(f"Error fetching user rank: {e}")
-            return None, "Failed to fetch user rank"
+        groups_data = await fetch_json(session, url, headers=headers)
+        groups = groups_data.get('data', [])
+        for group in groups:
+            if group['group']['id'] == int(group_id):
+                return group['role']['rank'], None
+        return None, "User is not in the group"
 
 @bot.event
 async def on_ready():
@@ -121,15 +122,18 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
-        rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+        rank_number, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
             logging.error(f"Error occurred for {username}: {error}")
             return
 
+        # Get the rank name from the mapping
+        rank_name = RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank")
+
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank_name}",
             color=0x1E90FF
         )
         embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
