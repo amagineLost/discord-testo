@@ -1,10 +1,9 @@
-from datetime import datetime
 import discord
 from discord.ext import commands
-import aiohttp
-import json
-import logging
 import os
+import aiohttp
+import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -13,13 +12,12 @@ logging.basicConfig(level=logging.DEBUG)
 intents = discord.Intents.default()
 intents.members = True
 intents.presences = True
-intents.message_content = True  # This is required to read message content in newer API versions
+intents.message_content = True
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Environment Variables
-ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
+ROBLOX_GROUP_ID = '11592051'
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
@@ -34,16 +32,9 @@ try:
 except json.JSONDecodeError as e:
     raise ValueError("Invalid JSON format in RANK_NAME_MAPPING environment variable.") from e
 
-# Dictionary to track ongoing commands
+# Create a dictionary to track ongoing commands
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
-
-def calculate_account_age(created_date_str):
-    """Calculate the number of days since the account was created."""
-    created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
-    today = datetime.utcnow()
-    delta = today - created_date
-    return delta.days
 
 async def fetch_json(session, url, method='GET', headers=None, json=None):
     try:
@@ -71,8 +62,7 @@ async def get_user_info(username):
         user = users[0]
         return {
             'id': user['id'],
-            'display_name': user['displayName'],
-            'created': user['created']
+            'display_name': user['displayName']
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -138,11 +128,9 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
-        account_age = calculate_account_age(user_info['created'])
-
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}",
             color=0x1E90FF
         )
         embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
