@@ -3,7 +3,7 @@ from discord.ext import commands
 import os
 import aiohttp
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.DEBUG)
 # Create intents object and enable all required intents
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True  # Enable message content intent
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
