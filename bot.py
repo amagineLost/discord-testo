@@ -80,12 +80,15 @@ async def on_ready():
 # Command to check the rank of a user in the Roblox group
 @bot.command()
 async def rank(ctx, *, username: str):
-    await ctx.send(f"Fetching rank for {username}...")
-    
-    # Call the function to get the rank
-    rank_info = get_user_rank(username)
-    
-    # Send the result to the Discord channel
-    await ctx.send(rank_info)
+    try:
+        await ctx.send(f"Fetching rank for {username}...")
+        
+        # Call the function to get the rank
+        rank_info = get_user_rank(username)
+        
+        # Send the result to the Discord channel
+        await ctx.send(rank_info)
+    except discord.DiscordException as e:
+        await ctx.send(f"An error occurred: {e}")
 
 bot.run(DISCORD_TOKEN)
