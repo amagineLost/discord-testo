@@ -71,13 +71,6 @@ async def get_user_badges(session, user_id):
     }
     return await fetch_json(session, url, headers=headers)
 
-async def get_user_game_passes(session, user_id):
-    url = f'https://games.roblox.com/v1/users/{user_id}/game-passes'
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
-    }
-    return await fetch_json(session, url, headers=headers)
-
 async def get_user_status(session, user_id):
     url = f'https://users.roblox.com/v1/users/{user_id}/status'
     headers = {
@@ -117,10 +110,6 @@ async def get_user_info_by_username(session, username):
     badges_data = await get_user_badges(session, user_id)
     badges = [badge['name'] for badge in badges_data.get('data', [])]
     
-    # Get user game passes
-    game_passes_data = await get_user_game_passes(session, user_id)
-    game_passes = [game_pass['name'] for game_pass in game_passes_data.get('data', [])]
-    
     # Get user status
     status_data = await get_user_status(session, user_id)
     status = status_data.get('status', 'No status available')
@@ -132,7 +121,6 @@ async def get_user_info_by_username(session, username):
         'account_age_days': remaining_days,
         'avatar_url': avatar_url,
         'badges': badges,
-        'game_passes': game_passes,
         'status': status
     }, None
 
@@ -210,7 +198,6 @@ async def rank(ctx, *, username: str):
             account_age_days = user_info['account_age_days']
             avatar_url = user_info['avatar_url']
             rank_name, error = await get_user_rank_in_group(session, user_id, ROBLOX_GROUP_ID)
-
             if error:
                 await ongoing_message.edit(content=f"Error: {error}")
                 logging.error(f"Error occurred while fetching rank for {username}: {error}")
@@ -221,7 +208,6 @@ async def rank(ctx, *, username: str):
             embed.add_field(name="Rank", value=rank_name, inline=False)
             embed.add_field(name="Account Age", value=f"{account_age_years} years and {account_age_days} days", inline=False)
             embed.add_field(name="Badges", value=", ".join(user_info['badges']) if user_info['badges'] else "None", inline=False)
-            embed.add_field(name="Game Passes", value=", ".join(user_info['game_passes']) if user_info['game_passes'] else "None", inline=False)
             embed.add_field(name="Status", value=user_info['status'], inline=False)
 
             await ongoing_message.edit(content=f"Rank information for {username}:", embed=embed)
