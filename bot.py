@@ -77,10 +77,14 @@ async def get_user_info(username):
         current_date = datetime.utcnow()
         account_age = (current_date - created_date).days
         
+        # Get user avatar URL
+        avatar_url = await get_roblox_avatar(session, user_id)
+        
         return {
             'id': user_id,
             'display_name': display_name,
-            'account_age': account_age
+            'account_age': account_age,
+            'avatar_url': avatar_url
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -98,6 +102,19 @@ async def get_user_rank_in_group(user_id, group_id):
                 rank_number = group['role']['rank']
                 return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
         return None, "User is not in the group"
+
+async def get_roblox_avatar(session, user_id):
+    url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={user_id}&size=420x420&format=Png&isCircular=false"
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    try:
+        data = await fetch_json(session, url, headers=headers)
+        if data['data']:
+            return data['data'][0]['imageUrl']
+    except Exception as e:
+        logging.error(f"Failed to fetch avatar for user ID {user_id}: {e}")
+    return None
 
 @bot.event
 async def on_ready():
@@ -141,6 +158,7 @@ async def rank(ctx, *, username: str):
         user_id = user_info['id']
         display_name = user_info['display_name']
         account_age = user_info['account_age']
+        avatar_url = user_info['avatar_url']
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
@@ -152,7 +170,8 @@ async def rank(ctx, *, username: str):
             description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
             color=0x1E90FF
         )
-        embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
 
         await ongoing_message.edit(content=None, embed=embed)
