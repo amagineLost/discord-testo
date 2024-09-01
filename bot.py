@@ -57,6 +57,34 @@ async def fetch_json(session, url, method='GET', headers=None, json=None):
         logging.error(f"JSON Decode Error: {e} for URL {url}")
         raise Exception(f"JSON Decode Error: {e}")
 
+async def get_user_info(session, user_id):
+    url = f'https://users.roblox.com/v1/users/{user_id}'
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    return await fetch_json(session, url, headers=headers)
+
+async def get_user_badges(session, user_id):
+    url = f'https://badges.roblox.com/v1/users/{user_id}/badges'
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    return await fetch_json(session, url, headers=headers)
+
+async def get_user_game_passes(session, user_id):
+    url = f'https://games.roblox.com/v1/users/{user_id}/game-passes'
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    return await fetch_json(session, url, headers=headers)
+
+async def get_user_status(session, user_id):
+    url = f'https://users.roblox.com/v1/users/{user_id}/status'
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    return await fetch_json(session, url, headers=headers)
+
 async def get_user_info(username):
     url = "https://users.roblox.com/v1/usernames/users"
     headers = {
@@ -76,7 +104,7 @@ async def get_user_info(username):
         
         # Get account creation date
         user_info_url = f"https://users.roblox.com/v1/users/{user_id}"
-        user_info_data = await fetch_json(session, user_info_url, headers=headers)
+        user_info_data = await get_user_info(session, user_id)
         created_date_str = user_info_data['created']
         created_date = datetime.strptime(created_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
         current_date = datetime.utcnow()
@@ -86,12 +114,27 @@ async def get_user_info(username):
         # Get user avatar URL
         avatar_url = await get_roblox_avatar(session, user_id)
         
+        # Get user badges
+        badges_data = await get_user_badges(session, user_id)
+        badges = [badge['name'] for badge in badges_data.get('data', [])]
+        
+        # Get user game passes
+        game_passes_data = await get_user_game_passes(session, user_id)
+        game_passes = [game_pass['name'] for game_pass in game_passes_data.get('data', [])]
+        
+        # Get user status
+        status_data = await get_user_status(session, user_id)
+        status = status_data.get('status', 'No status available')
+        
         return {
             'id': user_id,
             'display_name': display_name,
             'account_age_years': account_age_years,
             'account_age_days': remaining_days,
-            'avatar_url': avatar_url
+            'avatar_url': avatar_url,
+            'badges': badges,
+            'game_passes': game_passes,
+            'status': status
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -167,37 +210,25 @@ async def rank(ctx, *, username: str):
         account_age_years = user_info['account_age_years']
         account_age_days = user_info['account_age_days']
         avatar_url = user_info['avatar_url']
-        rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+        rank_name, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
-            logging.error(f"Error occurred for {username}: {error}")
+            logging.error(f"Error occurred while fetching rank for {username}: {error}")
             return
 
-        # Create embed
-        embed = discord.Embed(
-            title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age_years} years and {account_age_days} days",
-            color=0x1E90FF
-        )
-        if avatar_url:
-            embed.set_thumbnail(url=avatar_url)
-        embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
+        embed = discord.Embed(title=f"{display_name}'s Rank Information", color=discord.Color.blue())
+        embed.set_thumbnail(url=avatar_url if avatar_url else "https://www.roblox.com/favicon.ico")
+        embed.add_field(name="Rank", value=rank_name, inline=False)
+        embed.add_field(name="Account Age", value=f"{account_age_years} years and {account_age_days} days", inline=False)
+        embed.add_field(name="Badges", value=", ".join(user_info['badges']) if user_info['badges'] else "None", inline=False)
+        embed.add_field(name="Game Passes", value=", ".join(user_info['game_passes']) if user_info['game_passes'] else "None", inline=False)
+        embed.add_field(name="Status", value=user_info['status'], inline=False)
 
-        # Add more fields
-        embed.add_field(name="Badges", value="TBD", inline=False)  # Replace with actual badge info if available
-        embed.add_field(name="Status", value="TBD", inline=False)  # Replace with actual status info if available
-
-        # Add footer
-        embed.set_footer(text=f"Information retrieved from Roblox | Requested at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-        # Edit message with embed
-        await ongoing_message.edit(content=None, embed=embed)
-        logging.debug(f"Edited message with rank info for {username}.")
+        await ongoing_message.edit(content=f"Rank information for {username}:", embed=embed)
+        logging.debug(f"Displayed rank information for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
-        logging.error(f"Error occurred for {username}: {e}")
-    finally:
-        command_locks.pop(lock_key, None)
-        logging.debug(f"Lock released for {username}.")
+        logging.error(f"Exception in rank command for {username}: {e}")
 
 bot.run(DISCORD_TOKEN)
