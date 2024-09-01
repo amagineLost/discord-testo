@@ -3,10 +3,13 @@ from discord.ext import commands
 import os
 import requests
 
+# Create intents object and enable required intents
 intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
 intents.members = True
+
+# Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
