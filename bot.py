@@ -81,13 +81,14 @@ async def on_ready():
 @bot.command()
 async def rank(ctx, *, username: str):
     try:
-        await ctx.send(f"Fetching rank for {username}...")
+        # Send an initial message to indicate that the process has started
+        message = await ctx.send(f"Fetching rank for {username}...")
         
         # Call the function to get the rank
         rank_info = get_user_rank(username)
         
-        # Send the result to the Discord channel
-        await ctx.send(rank_info)
+        # Edit the existing message with the rank information
+        await message.edit(content=rank_info)
     except discord.DiscordException as e:
         await ctx.send(f"An error occurred: {e}")
 
