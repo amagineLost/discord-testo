@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import requests
 import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,9 @@ DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 # Check if necessary environment variables are set
 if not ROBLOX_COOKIE or not DISCORD_TOKEN:
     raise ValueError("Environment variables ROBLOX_COOKIE and DISCORD_TOKEN must be set.")
+
+# Create a dictionary to track ongoing commands
+command_locks = {}
 
 # Function to get user ID from username
 def get_user_id(username):
@@ -84,7 +88,17 @@ async def on_ready():
 # Command to check the rank of a user in the Roblox group
 @bot.command()
 async def rank(ctx, *, username: str):
-    logging.info(f"Rank command triggered by {ctx.author} for username: {username}")
+    # Use the username to create a unique lock key
+    lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
+
+    # Acquire the lock for the username
+    if lock_key in command_locks:
+        await ctx.send(f"Please wait, the command is already being processed for `{username}`.")
+        return
+
+    # Set the lock
+    command_locks[lock_key] = True
+
     try:
         # Send an initial message to indicate that the process has started
         message = await ctx.send(f"Fetching rank for {username}...")
@@ -96,5 +110,8 @@ async def rank(ctx, *, username: str):
         await message.edit(content=rank_info)
     except discord.DiscordException as e:
         await ctx.send(f"An error occurred: {e}")
+    finally:
+        # Remove the lock
+        del command_locks[lock_key]
 
 bot.run(DISCORD_TOKEN)
