@@ -3,13 +3,14 @@ from discord.ext import commands
 import os
 import aiohttp
 import logging
-import asyncio
+from datetime import datetime, timedelta
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG to capture detailed logs
+logging.basicConfig(level=logging.DEBUG)
 
 # Create intents object and enable all required intents
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.members = True
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -45,16 +46,19 @@ async def get_user_info(username):
     data = {"usernames": [username]}
 
     async with aiohttp.ClientSession() as session:
-        users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
-        users = users_data.get('data', [])
-        if not users:
-            return None, "User not found"
-        user = users[0]
-        return {
-            'id': user['id'],
-            'display_name': user['displayName'],
-            'username': user['name']
-        }, None
+        try:
+            users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
+            users = users_data.get('data', [])
+            if not users:
+                return None, "User not found"
+            user = users[0]
+            return {
+                'id': user['id'],
+                'display_name': user['displayName']
+            }, None
+        except Exception as e:
+            logging.error(f"Error fetching user info: {e}")
+            return None, "Failed to fetch user information"
 
 async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
@@ -64,27 +68,36 @@ async def get_user_rank_in_group(user_id, group_id):
     }
 
     async with aiohttp.ClientSession() as session:
-        groups_data = await fetch_json(session, url, headers=headers)
-        groups = groups_data.get('data', [])
-        for group in groups:
-            if group['group']['id'] == int(group_id):
-                return group['role']['rank'], None
-        return None, "User is not in the group"
+        try:
+            groups_data = await fetch_json(session, url, headers=headers)
+            groups = groups_data.get('data', [])
+            for group in groups:
+                if group['group']['id'] == int(group_id):
+                    return group['role']['rank'], None
+            return None, "User is not in the group"
+        except Exception as e:
+            logging.error(f"Error fetching user rank: {e}")
+            return None, "Failed to fetch user rank"
 
+@bot.event
+async def on_ready():
+    logging.info(f'Logged in as {bot.user.name}')
+
+@bot.command()
 async def rank(ctx, *, username: str):
     lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
     logging.debug(f"Received rank command for {username} in channel {ctx.channel.id}.")
 
     if lock_key in command_locks:
-        time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
+        time_left = command_rate_limit - (datetime.utcnow() - command_locks[lock_key]).total_seconds()
         if time_left > 0:
             await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for `{username}`.")
             logging.debug(f"Rate-limited response for {username}.")
             return
         else:
-            command_locks[lock_key] = discord.utils.utcnow()
+            command_locks[lock_key] = datetime.utcnow()
     else:
-        command_locks[lock_key] = discord.utils.utcnow()
+        command_locks[lock_key] = datetime.utcnow()
 
     try:
         ongoing_message = None
