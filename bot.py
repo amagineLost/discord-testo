@@ -6,7 +6,7 @@ import logging
 import asyncio
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG to capture detailed logs
 
 # Create intents object and enable all required intents
 intents = discord.Intents.all()
@@ -15,14 +15,12 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 
 # Check if necessary environment variables are set
-if not ROBLOX_COOKIE:
-    raise ValueError("Environment variable ROBLOX_COOKIE must be set.")
-if not DISCORD_TOKEN:
-    raise ValueError("Environment variable DISCORD_TOKEN must be set.")
+if not ROBLOX_COOKIE or not DISCORD_TOKEN:
+    raise ValueError("Environment variables ROBLOX_COOKIE and DISCORD_TOKEN must be set.")
 
 # Create a dictionary to track ongoing commands
 command_locks = {}
@@ -34,10 +32,8 @@ async def fetch_json(session, url, method='GET', headers=None, json=None):
             response.raise_for_status()
             return await response.json()
     except aiohttp.ClientResponseError as e:
-        logging.error(f"HTTP Error {e.status}: {e.message}")
         raise Exception(f"HTTP Error {e.status}: {e.message}")
     except aiohttp.ClientError as e:
-        logging.error(f"Request Error: {e}")
         raise Exception(f"Request Error: {e}")
 
 async def get_user_id(username):
@@ -84,13 +80,14 @@ async def get_user_rank(username):
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}')
-    await bot.change_presence(activity=discord.Game(name="Tracking Roblox Ranks"))
 
 @bot.command()
 async def rank(ctx, *, username: str):
+    # Use the username to create a unique lock key
     lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
     logging.debug(f"Received rank command for {username} in channel {ctx.channel.id}.")
 
+    # Check if the command is rate-limited
     if lock_key in command_locks:
         time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
         if time_left > 0:
@@ -98,11 +95,14 @@ async def rank(ctx, *, username: str):
             logging.debug(f"Rate-limited response for {username}.")
             return
         else:
+            # Update the lock timestamp if the cooldown has expired
             command_locks[lock_key] = discord.utils.utcnow()
-
-    command_locks[lock_key] = discord.utils.utcnow()
+    else:
+        # Set the lock with the current timestamp if not already locked
+        command_locks[lock_key] = discord.utils.utcnow()
 
     try:
+        # Check if there's already an ongoing message for this command
         ongoing_message = None
         async for message in ctx.channel.history(limit=10):
             if message.author == bot.user and message.content.startswith(f"Fetching rank for {username}"):
@@ -110,25 +110,26 @@ async def rank(ctx, *, username: str):
                 break
 
         if ongoing_message:
+            # Edit the existing message
             await ongoing_message.edit(content=f"Fetching rank for {username}...")
         else:
+            # Send an initial message to indicate that the process has started
             ongoing_message = await ctx.send(f"Fetching rank for {username}...")
             logging.debug(f"Sent initial fetching message for {username}.")
 
+        # Call the function to get the rank
         rank_info = await get_user_rank(username)
 
+        # Edit the existing message with the rank information
         await ongoing_message.edit(content=rank_info)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
         logging.error(f"Error occurred for {username}: {e}")
     finally:
+        # Ensure lock is removed
         if lock_key in command_locks:
             command_locks.pop(lock_key, None)
             logging.debug(f"Lock released for {username}.")
 
-# Ensure this script only runs one instance
-if __name__ == "__main__":
-    # Check if the script is running on Render or similar platform and bind to the required port
-    port = os.getenv('PORT', 8080)  # Default port 8080 if not specified
-    bot.run(DISCORD_TOKEN)
+bot.run(DISCORD_TOKEN)
