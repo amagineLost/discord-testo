@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import os
-import requests
+import aiohttp
 import logging
 import asyncio
 
@@ -24,58 +24,54 @@ if not ROBLOX_COOKIE or not DISCORD_TOKEN:
 
 # Create a dictionary to track ongoing commands
 command_locks = {}
+command_rate_limit = 60  # Rate limit in seconds
 
-# Function to get user ID from username
-def get_user_id(username):
+async def fetch_json(session, url, method='GET', headers=None, json=None):
+    try:
+        async with session.request(method, url, headers=headers, json=json) as response:
+            response.raise_for_status()
+            return await response.json()
+    except aiohttp.ClientResponseError as e:
+        raise Exception(f"HTTP Error {e.status}: {e.message}")
+    except aiohttp.ClientError as e:
+        raise Exception(f"Request Error: {e}")
+
+async def get_user_id(username):
     url = "https://users.roblox.com/v1/usernames/users"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
         'Content-Type': 'application/json',
     }
-    data = {
-        "usernames": [username]
-    }
+    data = {"usernames": [username]}
 
-    try:
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
-
-        users = response.json().get('data', [])
+    async with aiohttp.ClientSession() as session:
+        users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
+        users = users_data.get('data', [])
         if not users:
             return None, "User not found"
-
         return users[0]['id'], None
-    except requests.RequestException as e:
-        return None, f"Error fetching user ID: {e}"
 
-# Function to get the rank of the user in the group
-def get_user_rank_in_group(user_id, group_id):
+async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
     headers = {
         'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
         'Content-Type': 'application/json',
     }
 
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-
-        groups = response.json().get('data', [])
+    async with aiohttp.ClientSession() as session:
+        groups_data = await fetch_json(session, url, headers=headers)
+        groups = groups_data.get('data', [])
         for group in groups:
             if group['group']['id'] == int(group_id):
                 return group['role']['rank'], None
-
         return None, "User is not in the group"
-    except requests.RequestException as e:
-        return None, f"Error fetching user rank: {e}"
 
-# Function to get the user rank by username
-def get_user_rank(username):
-    user_id, error = get_user_id(username)
+async def get_user_rank(username):
+    user_id, error = await get_user_id(username)
     if error:
         return f"Error: {error}"
 
-    rank, error = get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
+    rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
     if error:
         return f"Error: {error}"
 
@@ -85,33 +81,37 @@ def get_user_rank(username):
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}')
 
-# Command to check the rank of a user in the Roblox group
 @bot.command()
 async def rank(ctx, *, username: str):
     # Use the username to create a unique lock key
     lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
 
-    # Acquire the lock for the username
+    # Check if the command is rate-limited
     if lock_key in command_locks:
-        await ctx.send(f"Please wait, the command is already being processed for `{username}`.")
-        return
+        time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
+        if time_left > 0:
+            await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for `{username}`.")
+            return
+        else:
+            # Update the lock timestamp if the cooldown has expired
+            command_locks[lock_key] = discord.utils.utcnow()
 
-    # Set the lock
-    command_locks[lock_key] = True
+    # Set the lock with the current timestamp
+    command_locks[lock_key] = discord.utils.utcnow()
 
     try:
         # Send an initial message to indicate that the process has started
         message = await ctx.send(f"Fetching rank for {username}...")
         
         # Call the function to get the rank
-        rank_info = get_user_rank(username)
+        rank_info = await get_user_rank(username)
         
         # Edit the existing message with the rank information
         await message.edit(content=rank_info)
-    except discord.DiscordException as e:
+    except Exception as e:
         await ctx.send(f"An error occurred: {e}")
     finally:
-        # Remove the lock
-        del command_locks[lock_key]
+        # Remove the lock after the operation is complete
+        command_locks.pop(lock_key, None)
 
 bot.run(DISCORD_TOKEN)
