@@ -173,6 +173,7 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
+        # Create embed
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
             description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age_years} years and {account_age_days} days",
@@ -182,14 +183,21 @@ async def rank(ctx, *, username: str):
             embed.set_thumbnail(url=avatar_url)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
 
+        # Add more fields
+        embed.add_field(name="Badges", value="TBD", inline=False)  # Replace with actual badge info if available
+        embed.add_field(name="Status", value="TBD", inline=False)  # Replace with actual status info if available
+
+        # Add footer
+        embed.set_footer(text=f"Information retrieved from Roblox | Requested at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+        # Edit message with embed
         await ongoing_message.edit(content=None, embed=embed)
         logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
         logging.error(f"Error occurred for {username}: {e}")
     finally:
-        if lock_key in command_locks:
-            command_locks.pop(lock_key, None)
-            logging.debug(f"Lock released for {username}.")
+        command_locks.pop(lock_key, None)
+        logging.debug(f"Lock released for {username}.")
 
 bot.run(DISCORD_TOKEN)
