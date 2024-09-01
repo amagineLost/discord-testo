@@ -1,10 +1,10 @@
-from datetime import datetime
 import discord
 from discord.ext import commands
-import aiohttp
-import json
-import logging
 import os
+import aiohttp
+import logging
+import json
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,9 +18,8 @@ intents.message_content = True  # This is required to read message content in ne
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Environment Variables
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
 
@@ -34,16 +33,19 @@ try:
 except json.JSONDecodeError as e:
     raise ValueError("Invalid JSON format in RANK_NAME_MAPPING environment variable.") from e
 
-# Dictionary to track ongoing commands
+# Create a dictionary to track ongoing commands
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
 
 def calculate_account_age(created_date_str):
     """Calculate the number of days since the account was created."""
-    created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
-    today = datetime.utcnow()
-    delta = today - created_date
-    return delta.days
+    try:
+        created_date = datetime.fromisoformat(created_date_str.replace("Z", "+00:00"))
+        today = datetime.utcnow()
+        delta = today - created_date
+        return delta.days
+    except ValueError:
+        return "Unknown"
 
 async def fetch_json(session, url, method='GET', headers=None, json=None):
     try:
@@ -65,10 +67,14 @@ async def get_user_info(username):
 
     async with aiohttp.ClientSession() as session:
         users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
+        logging.debug(f"User info response data: {users_data}")
         users = users_data.get('data', [])
         if not users:
             return None, "User not found"
         user = users[0]
+        if 'created' not in user:
+            logging.error(f"'created' field not found in user data: {user}")
+            return None, "'created' field not found in user data"
         return {
             'id': user['id'],
             'display_name': user['displayName'],
@@ -84,6 +90,7 @@ async def get_user_rank_in_group(user_id, group_id):
 
     async with aiohttp.ClientSession() as session:
         groups_data = await fetch_json(session, url, headers=headers)
+        logging.debug(f"User groups response data: {groups_data}")
         groups = groups_data.get('data', [])
         for group in groups:
             if group['group']['id'] == int(group_id):
