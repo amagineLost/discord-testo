@@ -13,13 +13,13 @@ logging.basicConfig(level=logging.DEBUG)
 intents = discord.Intents.default()
 intents.members = True
 intents.presences = True
-intents.message_content = True
+intents.message_content = True  # This is required to read message content in newer API versions
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-ROBLOX_GROUP_ID = '11592051'
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
+ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
 
@@ -61,10 +61,11 @@ async def get_user_info(username):
         if not users:
             return None, "User not found"
         user = users[0]
+        created_at = user.get('created', 'Unknown')  # Default to 'Unknown' if 'created' is not present
         return {
             'id': user['id'],
             'display_name': user['displayName'],
-            'created_at': user['created']
+            'created_at': created_at
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -84,17 +85,17 @@ async def get_user_rank_in_group(user_id, group_id):
         return None, "User is not in the group"
 
 async def get_character_image(user_id):
-    url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=420x420&format=Png"
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}',
-        'Content-Type': 'application/json',
-    }
-
+    url = f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png"
     async with aiohttp.ClientSession() as session:
-        images_data = await fetch_json(session, url, headers=headers)
-        if images_data and 'data' in images_data:
-            return images_data['data'][0]['imageUrl']
-        return None
+        try:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return url
+                else:
+                    return None
+        except aiohttp.ClientError as e:
+            logging.error(f"Failed to fetch character image: {e}")
+            return None
 
 @bot.event
 async def on_ready():
@@ -137,8 +138,13 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
-        created_at = datetime.strptime(user_info['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
-        account_age = (discord.utils.utcnow() - created_at).days
+        created_at = user_info['created_at']
+        if created_at != 'Unknown':
+            created_at_date = datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%fZ')
+            account_age = (discord.utils.utcnow() - created_at_date).days
+        else:
+            account_age = 'Unknown'
+
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
