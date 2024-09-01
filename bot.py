@@ -6,7 +6,7 @@ import logging
 import asyncio
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG to capture detailed logs
 
 # Create intents object and enable all required intents
 intents = discord.Intents.all()
@@ -85,12 +85,14 @@ async def on_ready():
 async def rank(ctx, *, username: str):
     # Use the username to create a unique lock key
     lock_key = f"{ctx.guild.id}-{ctx.channel.id}-{username}"
+    logging.debug(f"Received rank command for {username} in channel {ctx.channel.id}.")
 
     # Check if the command is rate-limited
     if lock_key in command_locks:
         time_left = command_rate_limit - (discord.utils.utcnow() - command_locks[lock_key]).total_seconds()
         if time_left > 0:
             await ctx.send(f"Please wait {int(time_left)} seconds before reusing the command for `{username}`.")
+            logging.debug(f"Rate-limited response for {username}.")
             return
         else:
             # Update the lock timestamp if the cooldown has expired
@@ -102,16 +104,20 @@ async def rank(ctx, *, username: str):
     try:
         # Send an initial message to indicate that the process has started
         message = await ctx.send(f"Fetching rank for {username}...")
-        
+        logging.debug(f"Sent initial fetching message for {username}.")
+
         # Call the function to get the rank
         rank_info = await get_user_rank(username)
-        
+
         # Edit the existing message with the rank information
         await message.edit(content=rank_info)
+        logging.debug(f"Edited message with rank info for {username}.")
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
+        logging.error(f"Error occurred for {username}: {e}")
     finally:
         # Remove the lock after the operation is complete
         command_locks.pop(lock_key, None)
+        logging.debug(f"Lock released for {username}.")
 
 bot.run(DISCORD_TOKEN)
