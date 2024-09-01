@@ -66,20 +66,24 @@ async def get_user_info(username):
     data = {"usernames": [username]}
 
     async with aiohttp.ClientSession() as session:
-        users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
-        logging.debug(f"User info response data: {users_data}")
-        users = users_data.get('data', [])
-        if not users:
-            return None, "User not found"
-        user = users[0]
-        if 'created' not in user:
-            logging.error(f"'created' field not found in user data: {user}")
-            return None, "'created' field not found in user data"
-        return {
-            'id': user['id'],
-            'display_name': user['displayName'],
-            'created': user['created']
-        }, None
+        try:
+            users_data = await fetch_json(session, url, method='POST', headers=headers, json=data)
+            logging.debug(f"User info response data: {users_data}")
+            users = users_data.get('data', [])
+            if not users:
+                return None, "User not found"
+            user = users[0]
+            if 'created' not in user:
+                logging.error(f"'created' field not found in user data: {user}")
+                return None, "'created' field not found in user data"
+            return {
+                'id': user['id'],
+                'display_name': user['displayName'],
+                'created': user['created']
+            }, None
+        except Exception as e:
+            logging.error(f"Failed to get user info for {username}: {e}")
+            return None, str(e)
 
 async def get_user_rank_in_group(user_id, group_id):
     url = f"https://groups.roblox.com/v1/users/{user_id}/groups/roles"
@@ -89,14 +93,18 @@ async def get_user_rank_in_group(user_id, group_id):
     }
 
     async with aiohttp.ClientSession() as session:
-        groups_data = await fetch_json(session, url, headers=headers)
-        logging.debug(f"User groups response data: {groups_data}")
-        groups = groups_data.get('data', [])
-        for group in groups:
-            if group['group']['id'] == int(group_id):
-                rank_number = group['role']['rank']
-                return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
-        return None, "User is not in the group"
+        try:
+            groups_data = await fetch_json(session, url, headers=headers)
+            logging.debug(f"User groups response data: {groups_data}")
+            groups = groups_data.get('data', [])
+            for group in groups:
+                if group['group']['id'] == int(group_id):
+                    rank_number = group['role']['rank']
+                    return RANK_NAME_MAPPING.get(str(rank_number), "Unknown Rank"), None
+            return None, "User is not in the group"
+        except Exception as e:
+            logging.error(f"Failed to get user rank for {user_id} in group {group_id}: {e}")
+            return None, str(e)
 
 @bot.event
 async def on_ready():
