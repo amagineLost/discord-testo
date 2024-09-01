@@ -4,6 +4,7 @@ import os
 import aiohttp
 import logging
 import json
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -42,9 +43,14 @@ async def fetch_json(session, url, method='GET', headers=None, json=None):
             response.raise_for_status()
             return await response.json()
     except aiohttp.ClientResponseError as e:
+        logging.error(f"HTTP Error {e.status}: {e.message} for URL {url}")
         raise Exception(f"HTTP Error {e.status}: {e.message}")
     except aiohttp.ClientError as e:
+        logging.error(f"Request Error: {e} for URL {url}")
         raise Exception(f"Request Error: {e}")
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON Decode Error: {e} for URL {url}")
+        raise Exception(f"JSON Decode Error: {e}")
 
 async def get_user_info(username):
     url = "https://users.roblox.com/v1/usernames/users"
@@ -60,9 +66,21 @@ async def get_user_info(username):
         if not users:
             return None, "User not found"
         user = users[0]
+        user_id = user['id']
+        display_name = user['displayName']
+        
+        # Get account creation date
+        user_info_url = f"https://users.roblox.com/v1/users/{user_id}"
+        user_info_data = await fetch_json(session, user_info_url, headers=headers)
+        created_date_str = user_info_data['created']
+        created_date = datetime.strptime(created_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        current_date = datetime.utcnow()
+        account_age = (current_date - created_date).days
+        
         return {
-            'id': user['id'],
-            'display_name': user['displayName']
+            'id': user_id,
+            'display_name': display_name,
+            'account_age': account_age
         }, None
 
 async def get_user_rank_in_group(user_id, group_id):
@@ -122,6 +140,7 @@ async def rank(ctx, *, username: str):
 
         user_id = user_info['id']
         display_name = user_info['display_name']
+        account_age = user_info['account_age']
         rank, error = await get_user_rank_in_group(user_id, ROBLOX_GROUP_ID)
         if error:
             await ongoing_message.edit(content=f"Error: {error}")
@@ -130,7 +149,7 @@ async def rank(ctx, *, username: str):
 
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
-            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}",
+            description=f"**Username:** {username}\n**Display Name:** {display_name}\n**Rank:** {rank}\n**Account Age:** {account_age} days",
             color=0x1E90FF
         )
         embed.set_thumbnail(url=f"https://www.roblox.com/avatar-thumbnail/{user_id}?width=150&height=150&format=png")
