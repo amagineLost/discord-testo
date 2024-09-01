@@ -28,23 +28,24 @@ async def search(ctx, *, keyword):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     url = f'https://robloxsocial.com/groups/{ROBUX_GROUP_ID}/members'
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code != 200:
-        await ctx.send('Failed to retrieve members.')
-        return
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raises an HTTPError if the status code is 4xx, 5xx
 
-    members = response.json().get('members', [])
-    matching_users = [member for member in members if keyword.lower() in member['username'].lower() or keyword.lower() in member['displayName'].lower()]
+        members = response.json().get('members', [])
+        matching_users = [member for member in members if keyword.lower() in member['username'].lower() or keyword.lower() in member['displayName'].lower()]
 
-    if not matching_users:
-        await ctx.send('No users found.')
-        return
+        if not matching_users:
+            await ctx.send('No users found.')
+            return
 
-    message = 'Users found:\n'
-    for user in matching_users:
-        message += f'{user["username"]} ({user["displayName"]})\n'
+        message = 'Users found:\n'
+        for user in matching_users:
+            message += f'{user["username"]} ({user["displayName"]})\n'
 
-    await ctx.send(message)
+        await ctx.send(message)
+
+    except requests.RequestException as e:
+        await ctx.send(f'An error occurred: {e}')
 
 bot.run(TOKEN)
