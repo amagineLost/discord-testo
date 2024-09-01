@@ -1,10 +1,10 @@
+from datetime import datetime
 import discord
 from discord.ext import commands
-import os
 import aiohttp
-import logging
 import json
-from datetime import datetime
+import logging
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,8 +18,9 @@ intents.message_content = True  # This is required to read message content in ne
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Environment Variables
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
-ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
+ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
 
@@ -33,7 +34,7 @@ try:
 except json.JSONDecodeError as e:
     raise ValueError("Invalid JSON format in RANK_NAME_MAPPING environment variable.") from e
 
-# Create a dictionary to track ongoing commands
+# Dictionary to track ongoing commands
 command_locks = {}
 command_rate_limit = 60  # Rate limit in seconds
 
