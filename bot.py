@@ -5,9 +5,9 @@ import requests
 
 # Create intents object and enable required intents
 intents = discord.Intents.default()
-intents.messages = True
-intents.guilds = True
-intents.members = True
+intents.messages = True  # Enables the ability to read messages
+intents.guilds = True    # Enables access to guild data
+intents.members = True   # Enables access to member data
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
