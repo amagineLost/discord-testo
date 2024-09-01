@@ -71,13 +71,6 @@ async def get_user_badges(session, user_id):
     }
     return await fetch_json(session, url, headers=headers)
 
-async def get_user_status(session, user_id):
-    url = f'https://users.roblox.com/v1/users/{user_id}/status'
-    headers = {
-        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
-    }
-    return await fetch_json(session, url, headers=headers)
-
 async def get_user_info_by_username(session, username):
     url = "https://users.roblox.com/v1/usernames/users"
     headers = {
@@ -110,18 +103,13 @@ async def get_user_info_by_username(session, username):
     badges_data = await get_user_badges(session, user_id)
     badges = [badge['name'] for badge in badges_data.get('data', [])]
     
-    # Get user status
-    status_data = await get_user_status(session, user_id)
-    status = status_data.get('status', 'No status available')
-    
     return {
         'id': user_id,
         'display_name': display_name,
         'account_age_years': account_age_years,
         'account_age_days': remaining_days,
         'avatar_url': avatar_url,
-        'badges': badges,
-        'status': status
+        'badges': badges
     }, None
 
 async def get_user_rank_in_group(session, user_id, group_id):
@@ -200,20 +188,23 @@ async def rank(ctx, *, username: str):
             rank_name, error = await get_user_rank_in_group(session, user_id, ROBLOX_GROUP_ID)
             if error:
                 await ongoing_message.edit(content=f"Error: {error}")
-                logging.error(f"Error occurred while fetching rank for {username}: {error}")
+                logging.error(f"Error occurred for {username}: {error}")
                 return
 
-            embed = discord.Embed(title=f"{display_name}'s Rank Information", color=discord.Color.blue())
-            embed.set_thumbnail(url=avatar_url if avatar_url else "https://www.roblox.com/favicon.ico")
-            embed.add_field(name="Rank", value=rank_name, inline=False)
-            embed.add_field(name="Account Age", value=f"{account_age_years} years and {account_age_days} days", inline=False)
-            embed.add_field(name="Badges", value=", ".join(user_info['badges']) if user_info['badges'] else "None", inline=False)
-            embed.add_field(name="Status", value=user_info['status'], inline=False)
+            rank_message = (
+                f"**Rank Information for {username}:**\n"
+                f"**Display Name:** {display_name}\n"
+                f"**Account Age:** {account_age_years} years and {account_age_days} days\n"
+                f"**Rank in Group:** {rank_name}\n"
+                f"**Avatar:** {avatar_url}\n"
+                f"**Badges:** {', '.join(user_info['badges']) if user_info['badges'] else 'None'}"
+            )
 
-            await ongoing_message.edit(content=f"Rank information for {username}:", embed=embed)
-            logging.debug(f"Displayed rank information for {username}.")
+            await ongoing_message.edit(content=rank_message)
+
     except Exception as e:
-        await ctx.send(f"An error occurred: {e}")
         logging.error(f"Exception in rank command for {username}: {e}")
+        await ctx.send(f"An error occurred: {e}")
 
-bot.run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    bot.run(DISCORD_TOKEN)
