@@ -123,6 +123,20 @@ async def get_roblox_avatar(session, user_id):
         logging.error(f"Failed to fetch avatar for user ID {user_id}: {e}")
     return None
 
+async def get_owned_game_passes(user_id, game_id):
+    url = f"https://api.roblox.com/user/{user_id}/game-pass"
+    headers = {
+        'Cookie': f'.ROBLOSECURITY={ROBLOX_COOKIE}'
+    }
+    async with aiohttp.ClientSession() as session:
+        try:
+            data = await fetch_json(session, url, headers=headers)
+            owned_game_passes = [gp for gp in data if gp.get("gameId") == game_id]
+            return owned_game_passes
+        except Exception as e:
+            logging.error(f"Failed to fetch game passes for user ID {user_id}: {e}")
+            return []
+
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user.name}')
@@ -173,6 +187,10 @@ async def rank(ctx, *, username: str):
             logging.error(f"Error occurred for {username}: {error}")
             return
 
+        # Fetch game passes using the asynchronous function
+        game_passes = await get_owned_game_passes(user_id, YOUR_GAME_ID)  # Replace YOUR_GAME_ID with the actual game ID
+        game_passes_info = "\n".join(f"Game Pass ID: {gp['id']} - {gp.get('name', 'No name available')}" for gp in game_passes) or "No game passes found."
+
         # Create embed
         embed = discord.Embed(
             title=f"Rank Information for {display_name}",
@@ -182,10 +200,7 @@ async def rank(ctx, *, username: str):
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
         embed.add_field(name="Roblox Profile", value=f"[{display_name}'s Profile](https://www.roblox.com/users/{user_id}/profile)", inline=False)
-
-        # Add more fields
-        embed.add_field(name="Badges", value="TBD", inline=False)  # Replace with actual badge info if available
-        embed.add_field(name="Status", value="TBD", inline=False)  # Replace with actual status info if available
+        embed.add_field(name="Game Passes", value=game_passes_info, inline=False)
 
         # Add footer
         embed.set_footer(text=f"Information retrieved from Roblox | Requested at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
