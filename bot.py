@@ -116,8 +116,9 @@ async def rank(ctx, *, username: str):
         await ctx.send(f"An error occurred: {e}")
         logging.error(f"Error occurred for {username}: {e}")
     finally:
-        # Remove the lock after the operation is complete
-        command_locks.pop(lock_key, None)
-        logging.debug(f"Lock released for {username}.")
+        # Ensure lock is removed
+        if lock_key in command_locks:
+            command_locks.pop(lock_key, None)
+            logging.debug(f"Lock released for {username}.")
 
 bot.run(DISCORD_TOKEN)
