@@ -11,6 +11,11 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 ROBLOX_GROUP_ID = '11592051'  # Replace with your group ID
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')  # Ensure this is correctly set in your environment
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+
+# Check if necessary environment variables are set
+if not ROBLOX_COOKIE or not DISCORD_TOKEN:
+    raise ValueError("Environment variables ROBLOX_COOKIE and DISCORD_TOKEN must be set.")
 
 # Function to get user ID from username
 def get_user_id(username):
@@ -83,4 +88,4 @@ async def rank(ctx, *, username: str):
     # Send the result to the Discord channel
     await ctx.send(rank_info)
 
-bot.run(os.getenv('DISCORD_TOKEN'))
+bot.run(DISCORD_TOKEN)
