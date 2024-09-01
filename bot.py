@@ -3,11 +3,8 @@ from discord.ext import commands
 import os
 import requests
 
-# Create intents object and enable required intents
-intents = discord.Intents.default()
-intents.messages = True  # Enables the ability to read messages
-intents.guilds = True    # Enables access to guild data
-intents.members = True   # Enables access to member data
+# Create intents object and enable all required intents
+intents = discord.Intents.all()
 
 # Initialize bot with the specified intents
 bot = commands.Bot(command_prefix='!', intents=intents)
