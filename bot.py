@@ -22,6 +22,7 @@ ROBLOX_GROUP_ID = '11592051'
 ROBLOX_COOKIE = os.getenv('ROBLOX_COOKIE')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 RANK_NAME_MAPPING_JSON = os.getenv('RANK_NAME_MAPPING')
+GAME_ID = 15673118894  # Replace with your actual game ID
 
 # Check if necessary environment variables are set
 if not ROBLOX_COOKIE or not DISCORD_TOKEN or not RANK_NAME_MAPPING_JSON:
@@ -188,7 +189,7 @@ async def rank(ctx, *, username: str):
             return
 
         # Fetch game passes using the asynchronous function
-        game_passes = await get_owned_game_passes(user_id, YOUR_GAME_ID)  # Replace YOUR_GAME_ID with the actual game ID
+        game_passes = await get_owned_game_passes(user_id, GAME_ID)
         game_passes_info = "\n".join(f"Game Pass ID: {gp['id']} - {gp.get('name', 'No name available')}" for gp in game_passes) or "No game passes found."
 
         # Create embed
