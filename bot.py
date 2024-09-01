@@ -191,16 +191,15 @@ async def rank(ctx, *, username: str):
                 logging.error(f"Error occurred for {username}: {error}")
                 return
 
-            rank_message = (
-                f"**Rank Information for {username}:**\n"
-                f"**Display Name:** {display_name}\n"
-                f"**Account Age:** {account_age_years} years and {account_age_days} days\n"
-                f"**Rank in Group:** {rank_name}\n"
-                f"**Avatar:** {avatar_url}\n"
-                f"**Badges:** {', '.join(user_info['badges']) if user_info['badges'] else 'None'}"
-            )
+            embed = discord.Embed(title=f"Rank Information for {username}", color=discord.Color.blue())
+            embed.add_field(name="Display Name", value=display_name, inline=False)
+            embed.add_field(name="Account Age", value=f"{account_age_years} years and {account_age_days} days", inline=False)
+            embed.add_field(name="Rank in Group", value=rank_name, inline=False)
+            embed.add_field(name="Badges", value=', '.join(user_info['badges']) if user_info['badges'] else 'None', inline=False)
+            embed.set_thumbnail(url=avatar_url)
+            embed.set_footer(text=f"Profile: https://www.roblox.com/users/{user_id}/profile")
 
-            await ongoing_message.edit(content=rank_message)
+            await ongoing_message.edit(content=None, embed=embed)
 
     except Exception as e:
         logging.error(f"Exception in rank command for {username}: {e}")
